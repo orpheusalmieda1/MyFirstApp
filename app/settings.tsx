@@ -58,7 +58,7 @@ export default function SettingsScreen() {
         await AsyncStorage.setItem(KEYS.NOTIF_PREFS, JSON.stringify({ enabled: false }));
         Alert.alert(
           'Permission Required',
-          'Please enable notifications for Sugar Tracker in your device Settings to use reminders.',
+          'Please enable notifications for GlucoDiary in your device Settings to use reminders.',
           [{ text: 'OK' }],
         );
       }
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   testBtn: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#7c3aed',
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   testBtnDisabled: {
-    backgroundColor: '#1e3a5f',
+    backgroundColor: '#2d1b69',
   },
   testBtnText: {
     color: '#ffffff',

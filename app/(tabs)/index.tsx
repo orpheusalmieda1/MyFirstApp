@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { DayModal } from '@/components/day-modal';
 import {
@@ -9,6 +9,7 @@ import {
   registerBackgroundTask,
   requestPermissions,
 } from '@/services/notifications';
+import { useAppUpdate } from '@/hooks/use-app-update';
 import { KEYS, loadAppData, runMigrations, saveAppData } from '@/services/storage';
 import type { AppData, DayData } from '@/types/sugar';
 
@@ -26,6 +27,7 @@ const EMPTY_DAY: DayData = { hadSugar: null, foods: [] };
 
 export default function SugarTracker() {
   const router = useRouter();
+  const { updateAvailable, isDownloading, applyUpdate } = useAppUpdate();
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -153,7 +155,7 @@ export default function SugarTracker() {
         {/* ── Top bar ── */}
         <View style={styles.topBar}>
           <View style={styles.topBarSpacer} />
-          <Text style={styles.appTitle}>Sugar Tracker</Text>
+          <Text style={styles.appTitle}>GlucoDiary</Text>
           <Pressable
             style={styles.settingsBtn}
             onPress={() => router.push('/settings')}
@@ -161,6 +163,21 @@ export default function SugarTracker() {
             <SettingsIcon />
           </Pressable>
         </View>
+
+        {/* ── Update banner (shown only when OTA update is available) ── */}
+        {updateAvailable && (
+          <View style={styles.updateBanner}>
+            <Text style={styles.updateText}>A new update is available!</Text>
+            <Pressable
+              style={styles.updateBtn}
+              onPress={applyUpdate}
+              disabled={isDownloading}>
+              {isDownloading
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Text style={styles.updateBtnText}>Update Now</Text>}
+            </Pressable>
+          </View>
+        )}
 
         {/* ── Month navigation ── */}
         <View style={styles.header}>
@@ -410,4 +427,34 @@ const styles = StyleSheet.create({
   cleanCount: { color: '#4ade80', fontWeight: '700' },
   sugarCount: { color: '#f87171', fontWeight: '700' },
   notLoggedCount: { color: '#64748b', fontWeight: '700' },
+  updateBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#7c3aed',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 12,
+    gap: 12,
+  },
+  updateText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  updateBtn: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    minWidth: 90,
+    alignItems: 'center',
+  },
+  updateBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
 });

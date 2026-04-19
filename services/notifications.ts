@@ -132,7 +132,7 @@ export async function scheduleReminder(): Promise<void> {
 
   const id = await Notifications.scheduleNotificationAsync({
     content: {
-      title: 'Sugar Tracker',
+      title: 'GlucoDiary',
       body: `Did you have sugar yesterday? Don't forget to log your intake for ${dateStr}`,
       data: { logDateKey },
       sound: true,
@@ -181,7 +181,7 @@ export async function checkAndSchedule(): Promise<void> {
 export async function sendTestNotification(): Promise<void> {
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: 'Sugar Tracker',
+      title: 'GlucoDiary',
       body: `Test reminder: Did you have sugar yesterday? Don't forget to log your intake for ${keyToDisplay(targetLogDate())}`,
       data: { test: true },
       sound: true,

@@ -170,21 +170,18 @@ export function DayModal({ visible, dateKey, dayData, onClose, onUpdate }: Props
       {/* Full-screen touch target that closes the modal */}
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
-      {/* Sheet wrapper — handles keyboard push-up */}
+      {/* Sheet wrapper — pushes sheet up on both platforms when keyboard opens */}
       <KeyboardAvoidingView
         style={styles.kavWrapper}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         pointerEvents="box-none">
 
         <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
 
-          {/* Drag handle */}
+          {/* ── Fixed header (never scrolls) ── */}
           <View style={styles.handle} />
-
-          {/* Date header */}
           <Text style={styles.dateText}>{formatKey(dateKey)}</Text>
 
-          {/* Sugar choice buttons */}
           <View style={styles.choiceRow}>
             <Pressable
               style={[styles.choiceBtn, styles.sugarBtn, dayData.hadSugar === true && styles.sugarBtnActive]}
@@ -204,12 +201,15 @@ export function DayModal({ visible, dateKey, dayData, onClose, onUpdate }: Props
 
           <View style={styles.divider} />
 
-          {/* ── Food items list ── */}
+          {/* ── Unified scrollable area: food list + form ── */}
+          {/* Single ScrollView so keyboard push-up + scroll always reveals the focused input */}
           <ScrollView
-            style={styles.listScroll}
+            style={styles.sheetScroll}
+            contentContainerStyle={styles.sheetScrollContent}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
 
+            {/* Food items section */}
             <Text style={styles.sectionLabel}>Food Items</Text>
 
             {dayData.foods.length === 0 ? (
@@ -226,7 +226,6 @@ export function DayModal({ visible, dateKey, dayData, onClose, onUpdate }: Props
               ))
             )}
 
-            {/* Total row */}
             {dayData.foods.length > 0 && (
               <View style={styles.totalRow}>
                 <Text style={styles.totalLabel}>Total sugar today</Text>
@@ -235,67 +234,68 @@ export function DayModal({ visible, dateKey, dayData, onClose, onUpdate }: Props
                 </Text>
               </View>
             )}
-          </ScrollView>
 
-          <View style={styles.divider} />
+            <View style={styles.divider} />
 
-          {/* ── Add / Edit form ── */}
-          <View style={styles.form}>
-            <Text style={styles.formHeading}>
-              {editingId ? 'Edit Food Item' : 'Log Food Item'}
-            </Text>
+            {/* Add / Edit form — lives inside the scroll so it's always reachable */}
+            <View style={styles.form}>
+              <Text style={styles.formHeading}>
+                {editingId ? 'Edit Food Item' : 'Log Food Item'}
+              </Text>
 
-            <TextInput
-              ref={nameRef}
-              style={styles.input}
-              placeholder="Food name *"
-              placeholderTextColor="#475569"
-              value={form.name}
-              onChangeText={(t) => setForm((f) => ({ ...f, name: t }))}
-              returnKeyType="next"
-              onSubmitEditing={() => qtyRef.current?.focus()}
-            />
-
-            <View style={styles.formRow}>
               <TextInput
-                ref={qtyRef}
-                style={[styles.input, styles.inputFlex]}
-                placeholder="Quantity (e.g. 1 cup)"
+                ref={nameRef}
+                style={styles.input}
+                placeholder="Food name *"
                 placeholderTextColor="#475569"
-                value={form.quantity}
-                onChangeText={(t) => setForm((f) => ({ ...f, quantity: t }))}
+                value={form.name}
+                onChangeText={(t) => setForm((f) => ({ ...f, name: t }))}
                 returnKeyType="next"
-                onSubmitEditing={() => sugarRef.current?.focus()}
+                onSubmitEditing={() => qtyRef.current?.focus()}
               />
-              <TextInput
-                ref={sugarRef}
-                style={[styles.input, styles.inputSugar]}
-                placeholder="Sugar g"
-                placeholderTextColor="#475569"
-                value={form.sugarGrams}
-                onChangeText={(t) => setForm((f) => ({ ...f, sugarGrams: t }))}
-                keyboardType="decimal-pad"
-                returnKeyType="done"
-                onSubmitEditing={handleSave}
-              />
+
+              <View style={styles.formRow}>
+                <TextInput
+                  ref={qtyRef}
+                  style={[styles.input, styles.inputFlex]}
+                  placeholder="Quantity (e.g. 1 cup)"
+                  placeholderTextColor="#475569"
+                  value={form.quantity}
+                  onChangeText={(t) => setForm((f) => ({ ...f, quantity: t }))}
+                  returnKeyType="next"
+                  onSubmitEditing={() => sugarRef.current?.focus()}
+                />
+                <TextInput
+                  ref={sugarRef}
+                  style={[styles.input, styles.inputSugar]}
+                  placeholder="Sugar g"
+                  placeholderTextColor="#475569"
+                  value={form.sugarGrams}
+                  onChangeText={(t) => setForm((f) => ({ ...f, sugarGrams: t }))}
+                  keyboardType="decimal-pad"
+                  returnKeyType="done"
+                  onSubmitEditing={handleSave}
+                />
+              </View>
+
+              <View style={styles.formButtons}>
+                {editingId && (
+                  <Pressable style={styles.cancelBtn} onPress={handleCancelEdit}>
+                    <Text style={styles.cancelBtnText}>Cancel</Text>
+                  </Pressable>
+                )}
+                <Pressable
+                  style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]}
+                  onPress={handleSave}
+                  disabled={!canSave}>
+                  <Text style={styles.saveBtnText}>
+                    {editingId ? 'Update Item' : 'Add Item'}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
 
-            <View style={styles.formButtons}>
-              {editingId && (
-                <Pressable style={styles.cancelBtn} onPress={handleCancelEdit}>
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </Pressable>
-              )}
-              <Pressable
-                style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]}
-                onPress={handleSave}
-                disabled={!canSave}>
-                <Text style={styles.saveBtnText}>
-                  {editingId ? 'Update Item' : 'Add Item'}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
+          </ScrollView>
 
         </Animated.View>
       </KeyboardAvoidingView>
@@ -368,9 +368,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1e293b',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
-    // max height via flex constraints
-    maxHeight: '88%',
+    maxHeight: '90%',
   },
   handle: {
     width: 40,
@@ -431,10 +429,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#334155',
   },
 
-  // Food list
-  listScroll: {
-    flexGrow: 0,
-    maxHeight: 250,
+  // Unified scroll area (food list + form)
+  sheetScroll: {
+    flex: 1,
+  },
+  sheetScrollContent: {
+    paddingBottom: Platform.OS === 'ios' ? 28 : 20,
   },
   sectionLabel: {
     fontSize: 11,
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#334155',
   },
   foodRowEditing: {
-    backgroundColor: '#1e3a5f',
+    backgroundColor: '#2d1b69',
   },
   foodMeta: {
     flex: 1,
@@ -529,7 +529,6 @@ const styles = StyleSheet.create({
   form: {
     paddingHorizontal: 16,
     paddingTop: 14,
-    paddingBottom: 4,
   },
   formHeading: {
     fontSize: 11,
@@ -579,12 +578,12 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#7c3aed',
     alignItems: 'center',
     justifyContent: 'center',
   },
   saveBtnDisabled: {
-    backgroundColor: '#1e3a5f',
+    backgroundColor: '#2d1b69',
   },
   saveBtnText: {
     color: '#fff',
