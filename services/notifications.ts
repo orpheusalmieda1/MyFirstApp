@@ -81,22 +81,22 @@ function keyToDisplay(key: string): string {
 }
 
 /**
- * Returns the next Date at 09:00:00.
- * If it's already past 9 AM today, returns tomorrow at 9 AM.
+ * Returns the next Date at the given hour (0–23), :00:00.
+ * If that time has already passed today, returns tomorrow at that hour.
  */
-function nextNineAM(): Date {
+function nextReminderTime(hour: number): Date {
   const t = new Date();
-  t.setHours(9, 0, 0, 0);
+  t.setHours(hour, 0, 0, 0);
   if (Date.now() >= t.getTime()) t.setDate(t.getDate() + 1);
   return t;
 }
 
 /**
- * The date the notification will be ABOUT: the day before the next 9 AM.
+ * The date the notification will be ABOUT: the day before the next reminder.
  * This is "yesterday" from the perspective of when the notification fires.
  */
-function targetLogDate(): string {
-  const trigger = nextNineAM();
+function targetLogDate(hour: number): string {
+  const trigger = nextReminderTime(hour);
   const logDay = new Date(trigger);
   logDay.setDate(logDay.getDate() - 1);
   return dateToKey(logDay);
@@ -135,8 +135,11 @@ export async function scheduleReminder(): Promise<void> {
   if (Platform.OS === 'web') return;
   await cancelReminder();
 
-  const trigger = nextNineAM();
-  const logDateKey = targetLogDate();
+  const hourRaw = await AsyncStorage.getItem(KEYS.NOTIF_HOUR);
+  const hour = hourRaw !== null ? parseInt(hourRaw, 10) : 9;
+
+  const trigger = nextReminderTime(hour);
+  const logDateKey = targetLogDate(hour);
   const dateStr = keyToDisplay(logDateKey);
 
   const id = await Notifications.scheduleNotificationAsync({
@@ -174,7 +177,9 @@ export async function checkAndSchedule(): Promise<void> {
     return;
   }
 
-  const logDateKey = targetLogDate();
+  const hourRaw = await AsyncStorage.getItem(KEYS.NOTIF_HOUR);
+  const hour = hourRaw !== null ? parseInt(hourRaw, 10) : 9;
+  const logDateKey = targetLogDate(hour);
   const raw = await AsyncStorage.getItem(KEYS.APP_DATA);
   const data = raw ? (JSON.parse(raw) as Record<string, { hadSugar?: boolean | null }>) : {};
   const entry = data[logDateKey];
@@ -186,22 +191,6 @@ export async function checkAndSchedule(): Promise<void> {
   } else {
     await scheduleReminder();
   }
-}
-
-export async function sendTestNotification(): Promise<void> {
-  if (Platform.OS === 'web') return;
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'GlucoDiary',
-      body: `Test reminder: Did you have sugar yesterday? Don't forget to log your intake for ${keyToDisplay(targetLogDate())}`,
-      data: { test: true },
-      sound: true,
-    },
-    trigger: {
-      type: SchedulableTriggerInputTypes.TIME_INTERVAL,
-      seconds: 3,
-    },
-  });
 }
 
 // ─── background task registration ────────────────────────────────────────────

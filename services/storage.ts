@@ -37,6 +37,8 @@ export const KEYS = {
   NOTIF_PREFS: 'sugar_notif_prefs',
   /** ID of the currently scheduled expo-notification (internal). */
   NOTIF_ID: 'sugar_notif_id',
+  /** Hour (24-h integer) at which the daily reminder fires. Default 9. */
+  NOTIF_HOUR: 'sugar_notif_hour',
 } as const;
 
 // ─── versioning ───────────────────────────────────────────────────────────────

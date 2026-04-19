@@ -2,43 +2,55 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Platform,
   Pressable,
-  SafeAreaView,
   StyleSheet,
   Switch,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   cancelReminder,
   checkAndSchedule,
   hasPermissions,
   requestPermissions,
-  sendTestNotification,
   type NotifPrefs,
 } from '@/services/notifications';
 import { KEYS } from '@/services/storage';
 
-type Status = 'idle' | 'sending' | 'sent';
+const REMINDER_HOURS = [6, 7, 8, 9, 10] as const;
+type ReminderHour = typeof REMINDER_HOURS[number];
+
+function hourLabel(h: number): string {
+  return `${h} AM`;
+}
+
+function hourLongLabel(h: number): string {
+  return `${h}:00 AM`;
+}
 
 export default function SettingsScreen() {
   const [enabled, setEnabled] = useState(false);
   const [permGranted, setPermGranted] = useState<boolean | null>(null);
-  const [testStatus, setTestStatus] = useState<Status>('idle');
+  const [notifHour, setNotifHour] = useState<ReminderHour>(9);
 
   useEffect(() => {
     async function load() {
-      const [prefsRaw, granted] = await Promise.all([
+      const [prefsRaw, granted, hourRaw] = await Promise.all([
         AsyncStorage.getItem(KEYS.NOTIF_PREFS),
         hasPermissions(),
+        AsyncStorage.getItem(KEYS.NOTIF_HOUR),
       ]);
       const prefs: NotifPrefs = prefsRaw ? JSON.parse(prefsRaw) : { enabled: true };
       setEnabled(prefs.enabled);
       setPermGranted(granted);
+      if (hourRaw !== null) {
+        const h = parseInt(hourRaw, 10) as ReminderHour;
+        if (REMINDER_HOURS.includes(h)) setNotifHour(h);
+      }
     }
     load();
   }, []);
@@ -53,7 +65,6 @@ export default function SettingsScreen() {
       if (granted) {
         await checkAndSchedule();
       } else {
-        // Revert toggle — no permission
         setEnabled(false);
         await AsyncStorage.setItem(KEYS.NOTIF_PREFS, JSON.stringify({ enabled: false }));
         Alert.alert(
@@ -67,19 +78,14 @@ export default function SettingsScreen() {
     }
   }
 
-  async function handleTestNotification() {
-    if (!(await hasPermissions())) {
-      Alert.alert(
-        'Permission Required',
-        'Enable reminders first to send a test notification.',
-      );
-      return;
-    }
-    setTestStatus('sending');
-    await sendTestNotification();
-    setTestStatus('sent');
-    setTimeout(() => setTestStatus('idle'), 4000);
+  async function handleHourChange(hour: ReminderHour) {
+    setNotifHour(hour);
+    await AsyncStorage.setItem(KEYS.NOTIF_HOUR, String(hour));
+    // Reschedule at the new time (no-op if notifications are off)
+    await checkAndSchedule();
   }
+
+  const isActive = enabled && !!permGranted;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -97,8 +103,9 @@ export default function SettingsScreen() {
         {/* ── Reminder toggle card ── */}
         <View style={styles.card}>
           <View style={styles.cardRow}>
+            <ClockIcon />
             <View style={styles.cardText}>
-              <Text style={styles.cardTitle}>Daily 9 AM Reminder</Text>
+              <Text style={styles.cardTitle}>Daily Reminder</Text>
               <Text style={styles.cardSub}>
                 Get notified each morning if you haven't logged the previous day
               </Text>
@@ -114,14 +121,34 @@ export default function SettingsScreen() {
 
           {/* Status badge */}
           <View style={styles.statusRow}>
-            <View style={[styles.statusDot, enabled && permGranted ? styles.dotActive : styles.dotInactive]} />
+            <View style={[styles.statusDot, isActive ? styles.dotActive : styles.dotInactive]} />
             <Text style={styles.statusText}>
-              {enabled && permGranted
-                ? 'Active — fires at 9:00 AM if previous day is unlogged'
+              {isActive
+                ? `Active — fires at ${hourLongLabel(notifHour)} if previous day is unlogged`
                 : enabled && permGranted === false
                   ? 'Notifications permission denied — check device Settings'
                   : 'Disabled'}
             </Text>
+          </View>
+        </View>
+
+        {/* ── Time picker ── */}
+        <View style={styles.card}>
+          <Text style={styles.timePickerHeading}>Reminder Time</Text>
+          <View style={styles.timePickerRow}>
+            {REMINDER_HOURS.map(h => {
+              const selected = h === notifHour;
+              return (
+                <Pressable
+                  key={h}
+                  style={[styles.timeOption, selected && styles.timeOptionSelected]}
+                  onPress={() => handleHourChange(h)}>
+                  <Text style={[styles.timeOptionText, selected && styles.timeOptionTextSelected]}>
+                    {hourLabel(h)}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
 
@@ -131,7 +158,7 @@ export default function SettingsScreen() {
           <View style={styles.infoRow}>
             <Text style={styles.infoBullet}>›</Text>
             <Text style={styles.infoText}>
-              Every day at 9 AM, the app checks if you logged data for the previous day.
+              Every day at your chosen time, the app checks if you logged data for the previous day.
             </Text>
           </View>
           <View style={styles.infoRow}>
@@ -155,28 +182,46 @@ export default function SettingsScreen() {
             </View>
           )}
         </View>
-
-        {/* ── Test button ── */}
-        <Pressable
-          style={[styles.testBtn, testStatus === 'sending' && styles.testBtnDisabled]}
-          onPress={handleTestNotification}
-          disabled={testStatus === 'sending'}>
-          {testStatus === 'sending' ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text style={styles.testBtnText}>
-              {testStatus === 'sent' ? 'Notification sent! (check in ~3s)' : 'Send Test Notification'}
-            </Text>
-          )}
-        </Pressable>
-
-        <Text style={styles.testHint}>
-          The test notification will appear in ~3 seconds. Minimize the app to see it.
-        </Text>
       </View>
     </SafeAreaView>
   );
 }
+
+// ─── Clock icon ───────────────────────────────────────────────────────────────
+
+function ClockIcon() {
+  const size = 22;
+  const r = size / 2;
+  return (
+    <View style={{ width: size, height: size }}>
+      {/* Face */}
+      <View style={{
+        position: 'absolute', width: size, height: size,
+        borderRadius: r, borderWidth: 2, borderColor: '#94a3b8',
+      }} />
+      {/* Minute hand — pointing up (12 o'clock) */}
+      <View style={{
+        position: 'absolute', width: 2, height: r - 3,
+        backgroundColor: '#94a3b8', borderRadius: 1,
+        left: r - 1, top: 3,
+      }} />
+      {/* Hour hand — pointing left (9 o'clock) */}
+      <View style={{
+        position: 'absolute', width: r - 3, height: 2,
+        backgroundColor: '#94a3b8', borderRadius: 1,
+        left: 3, top: r - 1,
+      }} />
+      {/* Center dot */}
+      <View style={{
+        position: 'absolute', width: 4, height: 4,
+        borderRadius: 2, backgroundColor: '#94a3b8',
+        left: r - 2, top: r - 2,
+      }} />
+    </View>
+  );
+}
+
+// ─── styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   safe: {
@@ -233,6 +278,39 @@ const styles = StyleSheet.create({
     color: '#64748b',
     flex: 1,
   },
+  timePickerHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  timePickerRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  timeOption: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: '#0f172a',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  timeOptionSelected: {
+    backgroundColor: '#7c3aed',
+    borderColor: '#7c3aed',
+  },
+  timeOptionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  timeOptionTextSelected: {
+    color: '#ffffff',
+  },
   infoHeading: {
     fontSize: 12,
     fontWeight: '700',
@@ -255,27 +333,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#94a3b8',
     lineHeight: 19,
-  },
-  testBtn: {
-    backgroundColor: '#7c3aed',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-  },
-  testBtnDisabled: {
-    backgroundColor: '#2d1b69',
-  },
-  testBtnText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 15,
-  },
-  testHint: {
-    fontSize: 12,
-    color: '#475569',
-    textAlign: 'center',
-    marginTop: 2,
   },
 });
