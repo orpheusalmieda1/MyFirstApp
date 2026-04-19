@@ -18,6 +18,7 @@ import * as BackgroundFetch from 'expo-background-fetch';
 import * as Notifications from 'expo-notifications';
 import { SchedulableTriggerInputTypes } from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
+import { Platform } from 'react-native';
 
 import { KEYS } from '@/services/storage';
 
@@ -28,33 +29,37 @@ const TASK_NAME = 'sugar-tracker-daily-check';
 export type NotifPrefs = { enabled: boolean };
 
 // ─── background task  (must live at module scope) ─────────────────────────
+// Guard against web: expo-task-manager and expo-notifications have no web
+// implementation and will throw if called during the web bundle.
 
-TaskManager.defineTask(TASK_NAME, async () => {
-  try {
-    await checkAndSchedule();
-    return BackgroundFetch.BackgroundFetchResult.NewData;
-  } catch {
-    return BackgroundFetch.BackgroundFetchResult.Failed;
-  }
-});
-
-// ─── foreground notification handler (module scope) ───────────────────────
-
-Notifications.setNotificationHandler({
-  handleNotification: async (notification) => {
-    const logDateKey = notification.request.content.data?.logDateKey as string | undefined;
-    if (logDateKey) {
-      const raw = await AsyncStorage.getItem(KEYS.APP_DATA);
-      const data = raw ? (JSON.parse(raw) as Record<string, { hadSugar?: boolean | null }>) : {};
-      const entry = data[logDateKey];
-      if (entry?.hadSugar !== undefined && entry?.hadSugar !== null) {
-        // Already logged (red or green) — suppress silently
-        return { shouldShowAlert: false, shouldPlaySound: false, shouldSetBadge: false };
-      }
+if (Platform.OS !== 'web') {
+  TaskManager.defineTask(TASK_NAME, async () => {
+    try {
+      await checkAndSchedule();
+      return BackgroundFetch.BackgroundFetchResult.NewData;
+    } catch {
+      return BackgroundFetch.BackgroundFetchResult.Failed;
     }
-    return { shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false };
-  },
-});
+  });
+
+  // ── foreground notification handler (module scope) ─────────────────────
+
+  Notifications.setNotificationHandler({
+    handleNotification: async (notification) => {
+      const logDateKey = notification.request.content.data?.logDateKey as string | undefined;
+      if (logDateKey) {
+        const raw = await AsyncStorage.getItem(KEYS.APP_DATA);
+        const data = raw ? (JSON.parse(raw) as Record<string, { hadSugar?: boolean | null }>) : {};
+        const entry = data[logDateKey];
+        if (entry?.hadSugar !== undefined && entry?.hadSugar !== null) {
+          // Already logged (red or green) — suppress silently
+          return { shouldShowAlert: false, shouldPlaySound: false, shouldSetBadge: false };
+        }
+      }
+      return { shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false };
+    },
+  });
+}
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -100,6 +105,7 @@ function targetLogDate(): string {
 // ─── permissions ─────────────────────────────────────────────────────────────
 
 export async function requestPermissions(): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
   const { status: current } = await Notifications.getPermissionsAsync();
   if (current === 'granted') return true;
   const { status } = await Notifications.requestPermissionsAsync({
@@ -109,6 +115,7 @@ export async function requestPermissions(): Promise<boolean> {
 }
 
 export async function hasPermissions(): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
   const { status } = await Notifications.getPermissionsAsync();
   return status === 'granted';
 }
@@ -116,6 +123,7 @@ export async function hasPermissions(): Promise<boolean> {
 // ─── scheduling ───────────────────────────────────────────────────────────────
 
 export async function cancelReminder(): Promise<void> {
+  if (Platform.OS === 'web') return;
   const id = await AsyncStorage.getItem(KEYS.NOTIF_ID);
   if (id) {
     await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
@@ -124,6 +132,7 @@ export async function cancelReminder(): Promise<void> {
 }
 
 export async function scheduleReminder(): Promise<void> {
+  if (Platform.OS === 'web') return;
   await cancelReminder();
 
   const trigger = nextNineAM();
@@ -151,6 +160,7 @@ export async function scheduleReminder(): Promise<void> {
  * either schedule or cancel the 9 AM reminder accordingly.
  */
 export async function checkAndSchedule(): Promise<void> {
+  if (Platform.OS === 'web') return;
   const prefsRaw = await AsyncStorage.getItem(KEYS.NOTIF_PREFS);
   const prefs: NotifPrefs = prefsRaw ? JSON.parse(prefsRaw) : { enabled: true };
 
@@ -179,6 +189,7 @@ export async function checkAndSchedule(): Promise<void> {
 }
 
 export async function sendTestNotification(): Promise<void> {
+  if (Platform.OS === 'web') return;
   await Notifications.scheduleNotificationAsync({
     content: {
       title: 'GlucoDiary',
@@ -196,6 +207,7 @@ export async function sendTestNotification(): Promise<void> {
 // ─── background task registration ────────────────────────────────────────────
 
 export async function registerBackgroundTask(): Promise<void> {
+  if (Platform.OS === 'web') return;
   try {
     const registered = await TaskManager.isTaskRegisteredAsync(TASK_NAME);
     if (!registered) {
@@ -212,6 +224,7 @@ export async function registerBackgroundTask(): Promise<void> {
 }
 
 export async function unregisterBackgroundTask(): Promise<void> {
+  if (Platform.OS === 'web') return;
   try {
     await BackgroundFetch.unregisterTaskAsync(TASK_NAME);
   } catch {

@@ -6,6 +6,7 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
+    "platforms": ["ios", "android"],
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "myfirstapp",
@@ -37,10 +38,6 @@
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.WAKE_LOCK"
       ]
-    },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
@@ -82,6 +79,9 @@
       "eas": {
         "projectId": "68e831eb-5eae-4196-81e5-eed7a9a13e3a"
       }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/68e831eb-5eae-4196-81e5-eed7a9a13e3a"
     }
   }
 }
