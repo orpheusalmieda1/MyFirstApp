@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DayModal } from '@/components/day-modal';
+import { CoachmarkOverlay, type Rect } from '@/components/coachmark';
 import {
   checkAndSchedule,
   registerBackgroundTask,
@@ -13,6 +14,13 @@ import {
 import { useAppUpdate } from '@/hooks/use-app-update';
 import { KEYS, loadAppData, runMigrations, saveAppData } from '@/services/storage';
 import type { AppData, DayData } from '@/types/sugar';
+
+function getTimeGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -26,14 +34,34 @@ function makeDateKey(year: number, month: number, day: number): string {
 
 const EMPTY_DAY: DayData = { hadSugar: null, foods: [] };
 
+const COACH_STEPS = [
+  null,
+  { tooltip: 'Tap any day to log your sugar intake', button: 'Next' },
+  { tooltip: '🟢 Green = No sugar  🔴 Red = Had sugar  ⚪ Grey = Not logged yet', button: 'Next' },
+  { tooltip: 'Track your monthly progress here', button: 'Next' },
+  { tooltip: "Set daily reminders so you never forget to log", button: 'Got it!' },
+] as const;
+
 export default function SugarTracker() {
   const router = useRouter();
   const { updateAvailable, isDownloading, applyUpdate } = useAppUpdate();
   const today = new Date();
+  const [isReady, setIsReady] = useState(false);
+  const [userName, setUserName] = useState('');
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [appData, setAppData] = useState<AppData>({});
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+
+  // Coachmark state
+  const [coachStep, setCoachStep] = useState(0);
+  const [targetRect, setTargetRect] = useState<Rect | null>(null);
+
+  // Refs for coachmark targets
+  const todayRef = useRef<any>(null);
+  const calendarRef = useRef<any>(null);
+  const summaryRef = useRef<any>(null);
+  const settingsBtnRef = useRef<any>(null);
 
   // Track if we've done the first-launch permission request
   const permRequestedRef = useRef(false);
@@ -41,6 +69,17 @@ export default function SugarTracker() {
   // ── load data & init notifications ────────────────────────────────────────
   useEffect(() => {
     async function init() {
+      // Redirect to onboarding if not yet completed
+      const onboarded = await AsyncStorage.getItem(KEYS.ONBOARDING_COMPLETE);
+      if (!onboarded) {
+        router.replace('/onboarding');
+        return;
+      }
+
+      // Load user name for greeting
+      const name = await AsyncStorage.getItem(KEYS.USER_NAME);
+      if (name) setUserName(name);
+
       // Migrate stored data to the current schema (safe no-op if up to date)
       await runMigrations();
 
@@ -68,10 +107,47 @@ export default function SugarTracker() {
         // Sync notification schedule with current data state
         await checkAndSchedule();
       }
+
+      setIsReady(true);
     }
 
     init();
   }, []);
+
+  // ── coachmark: check flag once the screen is ready ────────────────────────
+  useEffect(() => {
+    if (!isReady) return;
+    AsyncStorage.getItem(KEYS.COACHMARK_SHOWN).then(shown => {
+      if (!shown) setCoachStep(1);
+    });
+  }, [isReady]);
+
+  // ── coachmark: measure target element whenever step changes ───────────────
+  useEffect(() => {
+    if (coachStep === 0) return;
+    setTargetRect(null);
+    const stepRefs = [null, todayRef, calendarRef, summaryRef, settingsBtnRef];
+    const ref = stepRefs[coachStep];
+    if (!ref) return;
+    const timer = setTimeout(() => {
+      ref.current?.measure((_fx: number, _fy: number, w: number, h: number, px: number, py: number) => {
+        if (w > 0) setTargetRect({ x: px, y: py, width: w, height: h });
+      });
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [coachStep]);
+
+  async function handleCoachNext() {
+    if (coachStep < 4) {
+      setCoachStep(c => c + 1);
+    } else {
+      setCoachStep(0);
+      setTargetRect(null);
+      await AsyncStorage.setItem(KEYS.COACHMARK_SHOWN, '1');
+    }
+  }
+
+  if (!isReady) return <View style={styles.safe} />;
 
   // ── data helpers ──────────────────────────────────────────────────────────
 
@@ -157,13 +233,22 @@ export default function SugarTracker() {
         <View style={styles.topBar}>
           <View style={styles.topBarSpacer} />
           <Text style={styles.appTitle}>GlucoDiary</Text>
-          <Pressable
-            style={styles.settingsBtn}
-            onPress={() => router.push('/settings')}
-            hitSlop={12}>
-            <SettingsIcon />
-          </Pressable>
+          <View ref={settingsBtnRef} collapsable={false}>
+            <Pressable
+              style={styles.settingsBtn}
+              onPress={() => router.push('/settings')}
+              hitSlop={12}>
+              <SettingsIcon />
+            </Pressable>
+          </View>
         </View>
+
+        {/* ── Greeting ── */}
+        {userName ? (
+          <Text style={styles.greeting}>
+            {getTimeGreeting()}, {userName}! {'👋'}
+          </Text>
+        ) : null}
 
         {/* ── Update banner (shown only when OTA update is available) ── */}
         {updateAvailable && (
@@ -193,7 +278,8 @@ export default function SugarTracker() {
           </Pressable>
         </View>
 
-        {/* ── Day-of-week labels ── */}
+        {/* ── Day-of-week labels + grid (wrapped for coachmark step 2) ── */}
+        <View ref={calendarRef} collapsable={false}>
         <View style={styles.row}>
           {DAY_NAMES.map((d) => (
             <View key={d} style={styles.cell}>
@@ -224,11 +310,14 @@ export default function SugarTracker() {
                   key={ci}
                   style={styles.cell}
                   onPress={future ? undefined : () => setSelectedKey(key)}>
-                  <View style={[
-                    styles.dot,
-                    dotStyle,
-                    isToday(day) && styles.todayRing,
-                  ]}>
+                  <View
+                    ref={isToday(day) ? todayRef : undefined}
+                    collapsable={false}
+                    style={[
+                      styles.dot,
+                      dotStyle,
+                      isToday(day) && styles.todayRing,
+                    ]}>
                     <Text style={[styles.dayNum, future && styles.futureDayNum]}>{day}</Text>
                   </View>
                   {hasFoods && !future && <View style={styles.foodPip} />}
@@ -238,8 +327,10 @@ export default function SugarTracker() {
           </View>
         ))}
 
+        </View>{/* end calendarRef */}
+
         {/* ── Monthly summary ── */}
-        <View style={styles.summary}>
+        <View ref={summaryRef} collapsable={false} style={styles.summary}>
           <Text style={styles.summaryText}>
             <Text style={styles.cleanCount}>{cleanCount} clean</Text>
             {'  ·  '}
@@ -259,6 +350,18 @@ export default function SugarTracker() {
           if (selectedKey) handleDayUpdate(selectedKey, data);
         }}
       />
+
+      {coachStep > 0 && targetRect && COACH_STEPS[coachStep] && (
+        <CoachmarkOverlay
+          visible
+          targetRect={targetRect}
+          tooltip={COACH_STEPS[coachStep]!.tooltip}
+          buttonLabel={COACH_STEPS[coachStep]!.button}
+          stepIndex={coachStep}
+          totalSteps={4}
+          onNext={handleCoachNext}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -428,6 +531,13 @@ const styles = StyleSheet.create({
   cleanCount: { color: '#4ade80', fontWeight: '700' },
   sugarCount: { color: '#f87171', fontWeight: '700' },
   notLoggedCount: { color: '#64748b', fontWeight: '700' },
+  greeting: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#f1f5f9',
+    paddingHorizontal: 4,
+    marginBottom: 16,
+  },
   updateBanner: {
     flexDirection: 'row',
     alignItems: 'center',

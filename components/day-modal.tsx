@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import type { DayData, FoodItem } from '@/types/sugar';
+import { trackDayMarked, trackFoodItemAdded, trackFoodItemDeleted } from '@/services/analytics';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -98,6 +99,7 @@ export function DayModal({ visible, dateKey, dayData, onClose, onUpdate }: Props
 
   function selectSugar(hadSugar: boolean) {
     onUpdate({ ...dayData, hadSugar });
+    trackDayMarked(dateKey, hadSugar);
     // Switching to No Sugar: also clear food form state
     if (!hadSugar) {
       setForm(EMPTY_FORM);
@@ -128,6 +130,7 @@ export function DayModal({ visible, dateKey, dayData, onClose, onUpdate }: Props
         sugarGrams,
       };
       onUpdate({ ...dayData, foods: [...dayData.foods, item] });
+      trackFoodItemAdded(name, quantity, sugarGrams);
     }
     setForm(EMPTY_FORM);
     Keyboard.dismiss();
@@ -141,6 +144,7 @@ export function DayModal({ visible, dateKey, dayData, onClose, onUpdate }: Props
 
   function handleDeleteItem(id: string) {
     onUpdate({ ...dayData, foods: dayData.foods.filter((f) => f.id !== id) });
+    trackFoodItemDeleted();
     if (editingId === id) {
       setEditingId(null);
       setForm(EMPTY_FORM);

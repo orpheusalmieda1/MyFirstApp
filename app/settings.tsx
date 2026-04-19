@@ -19,6 +19,7 @@ import {
   requestPermissions,
   type NotifPrefs,
 } from '@/services/notifications';
+import { trackNotificationTimeChanged } from '@/services/analytics';
 import { KEYS } from '@/services/storage';
 
 const REMINDER_HOURS = [6, 7, 8, 9, 10] as const;
@@ -83,6 +84,7 @@ export default function SettingsScreen() {
     await AsyncStorage.setItem(KEYS.NOTIF_HOUR, String(hour));
     // Reschedule at the new time (no-op if notifications are off)
     await checkAndSchedule();
+    trackNotificationTimeChanged(hour);
   }
 
   const isActive = enabled && !!permGranted;

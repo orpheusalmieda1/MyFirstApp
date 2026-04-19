@@ -39,6 +39,12 @@ export const KEYS = {
   NOTIF_ID: 'sugar_notif_id',
   /** Hour (24-h integer) at which the daily reminder fires. Default 9. */
   NOTIF_HOUR: 'sugar_notif_hour',
+  /** User's display name entered during onboarding. */
+  USER_NAME: 'user_name',
+  /** Set to '1' once the user has completed onboarding. */
+  ONBOARDING_COMPLETE: 'onboarding_complete',
+  /** Set to '1' once the main-screen coachmarks have been shown. */
+  COACHMARK_SHOWN: 'coachmark_shown',
 } as const;
 
 // ─── versioning ───────────────────────────────────────────────────────────────
